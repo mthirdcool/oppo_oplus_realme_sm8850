@@ -400,6 +400,9 @@ jobs:
         run: |
           cd kernel_workspace
           echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
+          # 必须先开启 SYSVIPC，IPC_NS 才能生效
+          echo "CONFIG_SYSVIPC=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_SYSVIPC_SYSCTL=y" >> ./common/arch/arm64/configs/gki_defconfig
           # --- 新增：开启 Droidspaces 所需的 Namespace 和 devtmpfs 支持 ---
           echo "CONFIG_NAMESPACES=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_PID_NS=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -407,6 +410,8 @@ jobs:
           echo "CONFIG_UTS_NS=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_DEVTMPFS=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_DEVTMPFS_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          # ntsync 配置
+          echo "CONFIG_NTSYNC=y" >> ./common/arch/arm64/configs/gki_defconfig
           # -------------------------------------------------------
           if [[ ${{ github.event.inputs.kpm_enable }} == 'builtin' && ( "${{ github.event.inputs.ksu_type }}" == "sukisu" || "${{ github.event.inputs.ksu_type }}" == "resukisu" ) ]]; then
             echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -438,6 +443,22 @@ jobs:
           # 6.12内核Rust配置
           echo "CONFIG_RUST=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_ANDROID_BINDER_IPC_RUST=m" >> ./common/arch/arm64/configs/gki_defconfig
+
+      - name: 应用 ntsync 补丁系列
+        run: |
+          cd kernel_workspace/common
+          # 1. 下载补丁 (请确保链接指向你仓库中的真实路径)
+          # 建议将两个 patch 放入你仓库的 other_patch 文件夹中
+          wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/other_patch/ntsync_base.patch
+          wget https://github.com/$GITHUB_REPOSITORY/raw/refs/heads/$GITHUB_REF_NAME/other_patch/ntsync_compat_android16-6.12.patch
+          # 2. 按顺序应用补丁
+          echo "正在应用 ntsync base 补丁..."
+          patch -p1 < ntsync_base.patch || { echo "Base 补丁失败"; exit 1; }
+          
+          echo "正在应用 ntsync 6.12 适配补丁..."
+          patch -p1 < ntsync_compat_android16-6.12.patch || { echo "6.12 补丁失败"; exit 1; }
+          
+          echo "所有 ntsync 补丁已应用成功"
           
       - name: 启用网络功能增强优化配置
         if: inputs.better_net
